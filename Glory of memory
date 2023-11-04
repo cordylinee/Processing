@@ -1,0 +1,208 @@
+//Minim音楽ライブラリを追加
+import ddf.minim.*; 
+import ddf.minim.analysis.*;
+
+//Minimライブラリのオブジェクト
+Minim minim; //Minim
+AudioPlayer player; //オーディオプレイヤー
+FFT fft; //高速フーリエ変換（音楽の周波数スペクトルを分析する）
+
+
+//描画のオブション設定
+String musicFile = "glory.mp3"; //読み込む音楽ファイル名
+
+int samplingBuffer = 512; //サンプリングバッハ数（1024,512,256,128…）
+int waveHeight = 20; //波形の高さ
+int equalizerHeight = 16; //上下エコライザーの高さ
+int equalizerHeight2 = 30; //回転エコライザーの高さ
+float equalizerSpeed = 0.01; //回転エコライザーの回転スピード
+
+
+//背景でうごめくキューブ
+int numCubes = 300; //キューブの数
+float[] xc = new float[numCubes]; //キューブのX軸
+float[] yc = new float[numCubes]; //キューブのY軸
+float[] zc = new float[numCubes]; //キューブのZ軸
+float[] cubeSize = new float[numCubes]; //キューブのサイズ
+
+
+//四隅の奥行きのあるキューブ
+float[] translations = {0, 500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000, 5500}; //キューブのZ軸
+float[] rotations = {0.01, 0.09, 0.03, 0.06,0.01, 0.09, 0.03, 0.06,0.01, 0.09, 0.03, 0.06}; //キューブの回転率
+
+
+
+//画面の初期設定
+void setup() {
+  size(1920, 1080, P3D); //画面解像度と3DCGモード
+  frameRate(60);//フレームレート
+
+  minim = new Minim(this); 
+  player = minim.loadFile( musicFile, samplingBuffer ); //音楽ファイル（サンプリングレート）読み込み、サンプリングバッハ数を指定
+  player.loop(); //音楽ファイルをループ再生する
+  fft = new FFT(player.bufferSize(), player.sampleRate()); //解析するサンプリングバッハ数、サンプリングレート
+
+  colorMode(HSB, 360, 100, 100, 255); //カラーモードはHSB（色相(360), 彩度(100), 明度(100), 透明度(255)）で指定
+  
+  //背景キューブの生成
+  for (int i = 0; i < numCubes; i++) {
+    xc[i] = random(-width, width); //ランダム生成
+    yc[i] = random(-height, height);
+    zc[i] = random(-1000, 1000);
+    cubeSize[i] = random(20, 120); //サイズランダム（20～120の間）  
+   }
+  
+}
+
+
+
+//描画
+void draw() {
+  
+  background(0, 0, 0, 255); //背景を黒にする
+  fft.forward(player.mix); //音声信号を周波数に変換する
+ 
+  float hue = map(millis(), 0, 50000, 0, 360) % 360; // 0から50000ミリ秒の間で色相を0から360にマッピング
+  float hue2 = map(millis(), 0, 5000, 0, 360) % 360; // 0から5000ミリ秒の間で色相を0から360にマッピング
+  float hue3 = map(millis(), 0, 10000, 0, 360) % 360; // 0から10000ミリ秒の間で色相を0から360にマッピング
+
+  //音の周波数の高さによって波の色を変える
+  for (int i = 0; i < fft.specSize(); i++) { //サンプリングバッハ数の分繰り返す
+    float x1 = map(i, 0, fft.specSize(), 0, width); //サンプリングバッハと画面の幅を対応させる
+    float x2 = map(i+1, 0, fft.specSize(), 0, width);  //サンプリングバッハと画面の幅を対応させる
+    if (fft.getBand(i) > 2) { //i番目の周波数ビンの振幅の強度（0～1）が1以上ならば・・・
+      stroke(330, 80, 100, 255); // 赤色
+    } else if (fft.getBand(i) > 1.0) {
+      stroke(280, 80, 100, 255); // 紫色
+    } else if (fft.getBand(i) > 0.5) {
+      stroke(200, 80, 100, 255); // 青色
+    } else if (fft.getBand(i) > 0.2) {
+      stroke(40, 80, 100, 255); // 橙色
+    } else if (fft.getBand(i) > 0.1) {
+      stroke(200, 80, 100, 255); // 青色
+    } else {
+      stroke(0, 0, 100, 255); //それ以外は白
+    }
+    line(x1, height/2 - fft.getBand(i)*waveHeight, x2, height/2 - fft.getBand(i+1)*waveHeight); //波形を描く
+  }
+
+
+  // 上下のエコライザーを描画
+  for (int i = 0; i < fft.specSize(); i++) {
+    fill(hue2,80,100,220); //グラフの面の色
+    stroke(0,0,0,0); //グラフの境界線の色
+    float x = map(i, 0, fft.specSize(), 0, width); //サンプリングバッハと画面の幅を対応させる
+    rect(x, height, width/fft.specSize(), -fft.getBand(i)*equalizerHeight); //左下のエコライザー
+    rect(width-x, 0, -width/fft.specSize(), fft.getBand(i)*equalizerHeight); //右上のエコライザー
+  }
+  
+  //回転するエコライザーを描画
+  for (int i = 0; i < 4; i++){ //グラフを3本描く
+    fill(random(360),100,100,150); //グラフの面の色（ランダムに変化）
+    stroke(0,0,0,0); //グラフの境界線の色
+    pushMatrix();
+      translate(width/2, height/2, (frameCount % 500) - 250); //グラフの位置
+      rotateX(frameCount * equalizerSpeed * i); //X軸回転率
+      rotateY(frameCount * equalizerSpeed * i); //Y軸回転率
+      rotateZ(frameCount * equalizerSpeed * i); //Z軸回転率
+        for (int j = 0; j < fft.specSize(); j++) {
+         float x = map(i, 0, fft.specSize(), 0, width); //サンプリングバッハと画面の幅を対応させる
+         rect(x, height, width/fft.specSize(), -fft.getBand(j)*equalizerHeight2); //グラフを描く
+      }
+    popMatrix();
+  }
+
+
+
+  float scaleVal = player.mix.level(); //現在の音量（レベル）を取得する
+
+  //キューブを配置する
+    for (int i = 0; i < translations.length; i++) {
+      
+      //左上キューブ
+      fill(hue3, 100, 100, 30); //キューブの色
+      stroke(hue3, 100, 100, 255); //キューブの線の色
+      pushMatrix();
+      translate(width/4, height/4, (frameCount % 500) - translations[i]); //位置
+      rotateX(frameCount * rotations[i]); //X軸の回転率
+      rotateY(frameCount * rotations[i]); //Y軸の回転率
+      rotateZ(frameCount * rotations[i]); //Z軸の回転率
+      box(50 + scaleVal * 500); //キューブを指定の大きさで描画
+      popMatrix();
+
+      //右上キューブ
+      fill(hue3 + 30, 100, 100, 30);
+      stroke(hue3 + 30, 100, 100, 255);
+      pushMatrix(); //座標系を保存
+      translate(3*width/4, height/4, (frameCount % 500) - translations[i]);
+      rotateX(frameCount * rotations[i]);
+      rotateY(frameCount * rotations[i]);
+      rotateZ(frameCount * rotations[i]);
+      box(50 + scaleVal * 500);
+      popMatrix(); //座標系を復元
+
+      //左下キューブ
+      fill(hue3 + 60, 100, 100, 30);
+      stroke(hue3 + 60, 100, 100, 255);
+      pushMatrix();
+      translate(width/4, 3*height/4, (frameCount % 500) - translations[i]);
+      rotateX(frameCount * rotations[i]);
+      rotateY(frameCount * rotations[i]);
+      rotateZ(frameCount * rotations[i]);
+      box(50 + scaleVal * 500);
+      popMatrix();
+     
+      //右下キューブ
+      fill(hue3 + 90, 100, 100, 30);
+      stroke(hue3 +90, 100, 100, 255);
+      pushMatrix();
+      translate(3*width/4, 3*height/4, (frameCount % 500) - translations[i]);
+      rotateX(frameCount * rotations[i]);
+      rotateY(frameCount * rotations[i]);
+      rotateZ(frameCount * rotations[i]);
+      box(50 + scaleVal * 500);
+      popMatrix();
+    }
+    
+  
+  //中央に円を描画する
+  fill(0, 0, 0, 0); //円の色
+  stroke(0, 0, 100, 255); //円の線の色
+  ellipse(width/2, height/2, scaleVal*2000, scaleVal*2000); //円の描画
+  ellipse(width/2, height/2, scaleVal*1300, scaleVal*1300); //円の描画
+  ellipse(width/2, height/2, scaleVal*800, scaleVal*800); //円の描画
+
+ 
+  //中央に渦巻きを描画する
+  if (scaleVal > 0.35) { //音量が大きい時のみ
+    //background(0, 0, 0, 255); //背景を黒にする
+    fill(0, 0, 0, 0); //渦巻の色
+    stroke(0, 0, 100, 255); //渦巻の線の色
+    pushMatrix();    
+      translate(width/2, height/2); //画面中央
+      rotate(frameCount * 0.2); //渦の回転速度
+        for (int i = 0; i < 400; i++) { //線を繰り返し引いて渦巻を描く
+        rotate(TWO_PI / 100); //線を1度回転させる
+        line(0, i, 80, i); //線を描写
+        }
+    popMatrix();
+  }
+  
+  //背景にうごめくキューブを描画する
+  if (scaleVal > 0.3) { //音量が大きい時のみ・・
+      //background(0, 0, 0, 180); //背景を切り替える
+      translate(width/2, height/2, -1000); //回転軸
+      rotateX(frameCount * 0.01); //X軸回転率
+      rotateY(frameCount * 0.01); //Y軸回転率   
+      fill(hue, 100, 100, 30); //背景キューブの色
+      stroke(hue,100, 100, 30); //背景キューブの線の色  
+      for (int i = 0; i < numCubes; i++) { //キューブの数だけ繰り返し
+      pushMatrix(); 
+        translate(xc[i], yc[i], zc[i]); //描画位置
+        box(cubeSize[i]); //キューブを描画
+      popMatrix();
+      }
+      
+      
+   }
+}
