@@ -1,0 +1,60 @@
+import ddf.minim.*;
+import ddf.minim.analysis.*;
+
+Minim minim;
+AudioPlayer song;
+FFT fft;
+
+float _noiseScale;
+float _time;
+float _rotation;
+
+void setup(){
+    _noiseScale = 0.002;
+    _time = 0;
+    _rotation = 0;
+
+    size(1920, 1080);
+    background(255);
+
+    minim = new Minim(this);
+    song = minim.loadFile("newworld.mp3", 1024); // あなたの音楽ファイルを指定してください
+    song.loop();
+    fft = new FFT(song.bufferSize(), song.sampleRate());
+    
+    colorMode(HSB, 360, 100, 100); // カラーモードをHSBに設定
+
+}
+
+void draw(){
+    background(0,0,100);
+    fft.forward(song.mix);
+    _time += 0.01; // 時間を更新
+
+    float volume = song.mix.level(); // 音量を取得
+
+    pushMatrix();
+    translate(width/2, height/2);
+    rotate(_rotation);
+    translate(-width/2, -height/2);
+
+    for (int i = 0; i < 100000; i++){
+        float x = random(width);
+        float y = random(height);
+        float noiseFactor = noise(x*_noiseScale, y*_noiseScale, _time) * volume * 3; // 3次元noise
+        float lineLength = noiseFactor * 100; // ここで線の長さを調整
+
+        // 線の長さに基づいて色を設定
+        color c = color(map(lineLength, 0, 5, 0, 40), 100, 100); // Hue（色相）を線の長さにマッピング
+        
+        pushMatrix();
+            translate(x, y);
+            rotate(noiseFactor * radians(1000)); // ここで線の流れ具合を調整
+            stroke(c, 100);
+            strokeWeight(1);
+            line(0, 0, lineLength, lineLength);
+        popMatrix();
+    }
+    popMatrix();
+}
+
